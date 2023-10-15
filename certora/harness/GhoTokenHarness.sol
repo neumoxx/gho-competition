@@ -9,5 +9,10 @@ contract GhoTokenHarness is GhoToken {
 
   constructor() GhoToken(msg.sender) {}
 
-  // just in case needed and can not be implemented in the GhoTokenHelper
+  function getFacilitatorBucketHarness(
+    address facilitator
+  ) external view returns (uint256, uint256) {
+    Facilitator memory f = this.getFacilitator(facilitator);
+    return (f.bucketCapacity, f.bucketLevel);
+  }
 }

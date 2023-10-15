@@ -65,6 +65,28 @@ function rayDivCVL(uint256 a, uint256 b) returns mathint {
 }
 
 
+/// @notice Functions defined in harness contract
+definition notHarnessCall(method f) returns bool = 
+    (f.selector != sig:getUserCurrentIndex(address).selector
+    && f.selector != sig:getUserDiscountRate(address).selector
+    && f.selector != sig:getUserAccumulatedDebtInterest(address).selector
+    && f.selector != sig:scaledBalanceOfToBalanceOf(uint256).selector
+    && f.selector != sig:getBalanceOfDiscountToken(address).selector
+    && f.selector != sig:rayMul(uint256,uint256).selector
+    && f.selector != sig:rayDiv(uint256,uint256).selector);
+
+
+
+/// @notice Operations not supported
+definition nonSupportedOperations(method f) returns bool = 
+    (f.selector == sig:transfer(address,uint256).selector
+    || f.selector == sig:allowance(address,address).selector
+    || f.selector == sig:approve(address,uint256).selector
+    || f.selector == sig:transferFrom(address,address,uint256).selector
+    || f.selector == sig:increaseAllowance(address,uint256).selector
+    || f.selector == sig:decreaseAllowance(address,uint256).selector);
+
+
 //todo: check balanceof after mint (stable index), burn after balanceof
 
 definition MAX_DISCOUNT() returns uint256 = 10000; // equals to 100% discount, in points
@@ -119,7 +141,7 @@ use rule disallowedFunctionalities;
 * @title proves that the user's balance of debt token (as reported by GhoVariableDebtToken::balanceOf) can't increase by calling any external non-mint function.
 **/
 //pass
-rule nonMintFunctionCantIncreaseBalance(method f) filtered { f-> f.selector != sig:mint(address, address, uint256, uint256).selector } {
+rule nonMintFunctionCantIncreaseBalance(method f) filtered { f-> !nonSupportedOperations(f) && notHarnessCall(f) && f.selector != sig:mint(address, address, uint256, uint256).selector } {
 	address user;
 	uint256 ts1;
 	uint256 ts2;
@@ -145,7 +167,7 @@ rule nonMintFunctionCantIncreaseBalance(method f) filtered { f-> f.selector != s
 * @title proves that a call to a non-mint operation won't increase the user's balance of the actual debt tokens (i.e. it's scaled balance)
 **/
 // pass
-rule nonMintFunctionCantIncreaseScaledBalance(method f) filtered { f-> f.selector != sig:mint(address, address, uint256, uint256).selector } {
+rule nonMintFunctionCantIncreaseScaledBalance(method f) filtered { f-> !nonSupportedOperations(f) && notHarnessCall(f) && f.selector != sig:mint(address, address, uint256, uint256).selector } {
 	address user;
 	uint256 ts1;
 	uint256 ts2;
@@ -167,7 +189,7 @@ rule nonMintFunctionCantIncreaseScaledBalance(method f) filtered { f-> f.selecto
 * @title proves that debt tokens aren't transferable
 **/
 // pass
-rule debtTokenIsNotTransferable(method f) {
+rule debtTokenIsNotTransferable(method f) filtered { f-> !nonSupportedOperations(f) && notHarnessCall(f)} {
 	address user1;
 	address user2;
 	require(user1 != user2);
@@ -187,7 +209,7 @@ rule debtTokenIsNotTransferable(method f) {
 * @title proves that only burn/mint/rebalanceUserDiscountPercent/updateDiscountDistribution can modify user's scaled balance
 **/
 // pass
-rule onlyCertainFunctionsCanModifyScaledBalance(method f) {
+rule onlyCertainFunctionsCanModifyScaledBalance(method f) filtered { f-> !nonSupportedOperations(f) && notHarnessCall(f)} {
 	address user;
 	uint256 ts1;
 	uint256 ts2;
@@ -213,7 +235,7 @@ rule onlyCertainFunctionsCanModifyScaledBalance(method f) {
 * @title proves that only a call to decreaseBalanceFromInterest will decrease the user's accumulated interest listing.
 **/
 // pass
-rule userAccumulatedDebtInterestWontDecrease(method f) {
+rule userAccumulatedDebtInterestWontDecrease(method f) filtered { f-> !nonSupportedOperations(f) && notHarnessCall(f)} {
 	address user;
 	uint256 ts1;
 	uint256 ts2;
@@ -235,7 +257,7 @@ rule userAccumulatedDebtInterestWontDecrease(method f) {
 * @title proves that a user can't nullify its debt without calling burn
 **/
 // pass
-rule userCantNullifyItsDebt(method f) {
+rule userCantNullifyItsDebt(method f) filtered { f-> !nonSupportedOperations(f) && notHarnessCall(f)} {
     address user;
     env e;
     env e2;
@@ -247,6 +269,26 @@ rule userCantNullifyItsDebt(method f) {
 	f(e2,args);
 	uint256 balanceAfterOp = balanceOf(e, user);
 	assert((balanceBeforeOp > 0 && balanceAfterOp == 0) => (f.selector == sig:burn(address, uint256, uint256).selector));
+}
+
+/**
+* @title Not supported operations always revert
+**/
+// pass
+rule nonSupportedOperationsAlwaysRevert(method f) filtered { f-> nonSupportedOperations(f) } {
+    env e;
+	calldataarg args;
+	f@withrevert(e,args);
+	assert(lastReverted);
+}
+
+
+// @notice Ensure all other funtions have at least one non-reverting path
+rule sanitySatisfy(method f) filtered { f-> !nonSupportedOperations(f) } {
+    env e;
+    calldataarg args;
+    f(e, args);
+    satisfy true;
 }
 
 /***************************************************************
@@ -535,4 +577,25 @@ rule burnAllDebtReturnsZeroDebt(address user) {
 	burn(e, user, _variableDebt, indexAtTimestamp(e.block.timestamp));
 	uint256 variableDebt_ = balanceOf(e, user);
     assert(variableDebt_ == 0);
+}
+
+/**
+* @title user can burn if their current index is greater than that retrieved from the pool
+**/
+rule userCanBurnIfCurrentIndexIsGreaterThanPoolsIndex() {
+    env e;
+	
+	address from;
+    uint256 amount;
+	uint256 index;
+
+	uint256 discountPercent = getUserDiscountRate(from);
+	uint256 bal1 = rayMul(e, 1000, getUserCurrentIndex(from));
+	uint256 bal2 = rayMul(e, 1000, indexAtTimestamp(e.block.timestamp));
+
+	require discountPercent > 0;
+	require(bal1 > bal2);
+	
+	burn(e, from, amount, index);
+	satisfy true;
 }

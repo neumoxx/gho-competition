@@ -12,7 +12,9 @@ methods{
 	// Helper getters
 	function GhoTokenHelper.getFacilitatorBucketLevel(address) external returns uint256 envfree;
 	function GhoTokenHelper.getFacilitatorBucketCapacity(address) external returns uint256 envfree;
+	function GhoTokenHelper.getFacilitatorLabel(address) external returns string envfree;
 	function GhoTokenHelper.getFacilitatorsLableLen(address facilitator) external  returns (uint256) envfree;
+	function GhoTokenHelper.stringsAreEqual(string,string) external returns bool envfree;
 	function GhoTokenHelper.toBytes32(address) external returns (bytes32) envfree;
 }
 
@@ -416,6 +418,234 @@ rule facilitator_in_list_after_addFacilitator(){
 	addFacilitator(e, facilitator, label, capacity);
 
 	assert inFacilitatorsList(toBytes32(facilitator));
+}
+
+/**
+* @title Facilitator values are stored correctly after the call
+*/
+rule addFacilitatorConsistencyCheck(){
+
+	env e;
+	address facilitator;
+	string label = "test";
+	uint128 capacity;
+
+	assumeInvariants(facilitator);
+
+	string initialLabel = GhoTokenHelper.getFacilitatorLabel(facilitator);
+	uint256 initialLabelLength = initialLabel.length;
+	require initialLabelLength <= 2;
+
+	require GhoTokenHelper.getFacilitatorBucketLevel(facilitator) == 0;
+
+	addFacilitator@withrevert(e, facilitator, label, capacity);
+	bool lastRev = lastReverted;
+	bool hasProperRole = hasRole(e, FACILITATOR_MANAGER_ROLE(e), e.msg.sender);
+
+	assert (
+		e.msg.value > 0 ||
+		initialLabelLength > 0 ||
+		!hasProperRole
+	) <=> lastRev;
+	assert !lastRev => (
+		GhoTokenHelper.getFacilitatorBucketCapacity(facilitator) == assert_uint256(capacity) &&
+		GhoTokenHelper.getFacilitatorBucketLevel(facilitator) == 0 &&
+		GhoTokenHelper.stringsAreEqual(label, GhoTokenHelper.getFacilitatorLabel(facilitator))
+	);
+}
+
+/**
+* @title Facilitator label cannot be empty
+*/
+rule addFacilitatorEmptyLabelMakesRevert(){
+	env e;
+	address facilitator;
+	string label;
+	uint128 capacity;
+
+	require label.length <= 2;
+
+	addFacilitator(e, facilitator, label, capacity);
+
+	assert label.length > 0;
+}
+
+/**
+* @notice Consistency check for the execution of function removeFacilitator
+*/
+rule removeFacilitatorConsistencyCheck(){
+
+	env e;
+	address facilitator;
+
+	removeFacilitator@withrevert(e, facilitator);
+	bool lastRev = lastReverted;
+
+	assert (
+		e.msg.value > 0
+	) => lastRev;
+	assert !lastRev => (
+		GhoTokenHelper.getFacilitatorBucketCapacity(facilitator) == 0 &&
+		GhoTokenHelper.getFacilitatorBucketLevel(facilitator) == 0
+	);
+}
+
+/**
+* @notice removeFacilitator reverts if label length is zero
+*/
+rule removeFacilitatorRevertsIfLabelLengthIsZero(){
+
+	env e;
+	address facilitator;
+
+	string initialLabel = GhoTokenHelper.getFacilitatorLabel(facilitator);
+	uint256 initialLabelLength = initialLabel.length;
+	require initialLabelLength <= 2;
+
+	removeFacilitator@withrevert(e, facilitator);
+	bool lastRev = lastReverted;
+
+	assert (
+		initialLabelLength == 0
+	) => lastRev;
+}
+
+/**
+* @notice Consistency check for the execution of function setFacilitatorBucketCapacity
+*/
+rule setFacilitatorBucketCapacityConsistencyCheck(){
+
+	env e;
+	address facilitator;
+	uint128 newCapacity;
+
+	assumeInvariants(facilitator);
+
+	string initialLabel = GhoTokenHelper.getFacilitatorLabel(facilitator);
+	uint256 initialLabelLength = initialLabel.length;
+	require initialLabelLength <= 2;
+
+	bool hasProperRole = hasRole(e, BUCKET_MANAGER_ROLE(e), e.msg.sender);
+
+	setFacilitatorBucketCapacity@withrevert(e, facilitator, newCapacity);
+	bool lastRev = lastReverted;
+
+	assert (
+		e.msg.value > 0 ||
+		initialLabelLength == 0 ||
+		!hasProperRole
+	) <=> lastRev;
+	assert !lastRev => (
+		GhoTokenHelper.getFacilitatorBucketCapacity(facilitator) == assert_uint256(newCapacity)
+	);
+}
+
+/**
+* @notice Consistency check for the execution of function getFacilitatorBucketConsistencyCheck
+**/
+rule getFacilitatorBucketConsistencyCheck() {
+
+	env e;
+	address facilitator;
+	uint256 bucketCapacity;
+	uint256 bucketLevel;
+	uint256 bucketCapacity2;
+	uint256 bucketLevel2;
+
+	assumeInvariants(facilitator);
+
+	bucketCapacity, bucketLevel = getFacilitatorBucket@withrevert(e, facilitator);
+	bucketCapacity2, bucketLevel2 = getFacilitatorBucketHarness@withrevert(e, facilitator);
+	bool lastRev = lastReverted;
+
+	assert (
+		e.msg.value > 0
+	) <=> lastRev;
+	assert !lastRev => (
+		bucketCapacity == bucketCapacity2 && 
+		bucketLevel == bucketLevel2
+	);
+}
+
+/**
+* @notice Consistency check for the execution of function mint
+**/
+rule mintConsistencyCheck() {
+
+	env e;
+	uint256 bucketCapacity;
+	uint256 bucketLevel;
+	uint256 bucketCapacity2;
+	uint256 bucketLevel2;
+	address account;
+	uint256 amount;
+
+	assumeInvariants(e.msg.sender);
+
+	bucketCapacity, bucketLevel = getFacilitatorBucket(e, e.msg.sender);
+	uint256 balancePre = balanceOf(e, account);
+	uint256 supplyPre = totalSupply(e);
+
+	uint256 finalBalance = require_uint256(balancePre + amount);
+	mathint finalBucketLevel = bucketLevel + amount;
+	uint256 finalSupply = require_uint256(supplyPre + amount);
+
+	mint@withrevert(e, account, amount);
+
+	bool lastRev = lastReverted;
+	uint256 balancePost = balanceOf(e, account);
+	uint256 supplyPost = totalSupply(e);
+	bucketCapacity2, bucketLevel2 = getFacilitatorBucket(e, e.msg.sender);
+	uint256 newBucketLevel = require_uint256(bucketLevel + amount);
+
+	assert (
+		e.msg.value > 0 ||
+		amount == 0 ||
+		to_mathint(bucketCapacity) < finalBucketLevel ||
+		finalBucketLevel > max_uint256
+	) <=> lastRev;
+	assert !lastRev => (
+		balancePost == finalBalance && 
+		supplyPost == finalSupply && 
+		bucketLevel2 == newBucketLevel
+	);
+}
+
+/**
+* @notice Consistency check for the execution of function burn
+**/
+rule burnConsistencyCheck() {
+
+	env e;
+	uint256 bucketCapacity;
+	uint256 bucketLevel;
+	uint256 bucketCapacity2;
+	uint256 bucketLevel2;
+	uint256 amount;
+
+	assumeInvariants(e.msg.sender);
+
+	bucketCapacity, bucketLevel = getFacilitatorBucket(e, e.msg.sender);
+	uint256 balancePre = balanceOf(e, e.msg.sender);
+	uint256 supplyPre = totalSupply(e);
+	burn@withrevert(e, amount);
+	bool lastRev = lastReverted;
+	uint256 balancePost = balanceOf(e, e.msg.sender);
+	uint256 supplyPost = totalSupply(e);
+	bucketCapacity2, bucketLevel2 = getFacilitatorBucket(e, e.msg.sender);
+	uint256 newBucketLevel = require_uint256(bucketLevel - amount);
+
+	assert (
+		e.msg.value > 0 ||
+		amount == 0 ||
+		balancePre < amount ||
+		bucketLevel < amount
+	) <=> lastRev;
+	assert !lastRev => (
+		balancePost == require_uint256(balancePre - amount) && 
+		supplyPost == require_uint256(supplyPre - amount) && 
+		bucketLevel2 == newBucketLevel
+	);
 }
 
 /**
