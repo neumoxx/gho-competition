@@ -27,6 +27,10 @@ contract GhoVariableDebtTokenHarness is GhoVariableDebtToken {
     return bal.rayMul(POOL.getReserveNormalizedVariableDebt(_underlyingAsset));
   }
 
+  function currentIndex() public view returns (uint256) {
+    return POOL.getReserveNormalizedVariableDebt(_underlyingAsset);
+  }
+
   function getBalanceOfDiscountToken(address user) external returns (uint256) {
     return _discountToken.balanceOf(user);
   }

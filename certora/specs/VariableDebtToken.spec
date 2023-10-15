@@ -14,7 +14,7 @@ definition bound(uint256 index) returns mathint = ((index / ray()) + 1 ) / 2;
 /*
 Due to rayDiv and RayMul Rounding (+ 0.5) - blance could increase by (gRNI() / Ray() + 1) / 2.
 */
-definition bounded_error_eq(uint x, uint y, uint scale, uint256 index) returns bool = to_mathint(x) <= y + (bound(index) * scale) && x + (bound(index) * scale) >= to_mathint(y);
+definition bounded_error_eq(uint x, mathint y, uint scale, uint256 index) returns bool = to_mathint(x) <= y + (bound(index) * scale) && x + (bound(index) * scale) >= to_mathint(y);
 
 
 

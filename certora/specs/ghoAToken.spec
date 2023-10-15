@@ -432,6 +432,7 @@ rule handleRepaymentConsistencyCheck(env e) {
 	uint256 balanceFromInterestPre = GHOVARDEBTOKEN.getBalanceFromInterest(e, onBehalfOf);
 	uint256 preTotalSupply = GHOTOKEN.totalSupply(e);
 	mathint facilitatorLevel = GhoTokenHelper.getFacilitatorBucketLevel(currentContract);
+	mathint finalBalanceFromInterest = (balanceFromInterestPre - amount) < 0?0:(balanceFromInterestPre - amount);
 
     handleRepayment@withrevert(e, user, onBehalfOf, amount);
     bool lastRev = lastReverted;
@@ -443,11 +444,12 @@ rule handleRepaymentConsistencyCheck(env e) {
 		e.msg.value > 0 ||
 		getPool(e) != e.msg.sender || 
 		(amount > balanceFromInterestPre && facilitatorLevel < (amount - balanceFromInterestPre)) ||
-		(amount > balanceFromInterestPre && to_mathint(balancePre) < (amount - balanceFromInterestPre))
+		(amount > balanceFromInterestPre && to_mathint(balancePre) < (amount - balanceFromInterestPre)) ||
+		finalBalanceFromInterest < 0
 	);
     assert !lastRev => (
-		amount > balanceFromInterestPre => (balanceFromInterestPost == 0 && postTotalSupply == require_uint256(preTotalSupply - (amount - balanceFromInterestPre))) &&
-		amount <= balanceFromInterestPre => balanceFromInterestPost == require_uint256(balanceFromInterestPre - amount)
+		balanceFromInterestPost == assert_uint256(finalBalanceFromInterest) &&
+		(amount > balanceFromInterestPre => postTotalSupply == require_uint256(preTotalSupply - (amount - balanceFromInterestPre)))
 	);
 }
 

@@ -149,7 +149,7 @@ definition inFacilitatorsList(bytes32 value) returns bool = (ghostIndexes[value]
 * @notice set_facilitatorList contains ghosts, hooks and invariant of the valid state of _facilitatorsList base on enumberableSet spec https://github.com/Certora/Examples/tree/master/CVLByExample/QuantifierExamples
 **/
 invariant facilitatorsList_setInvariant()
-    (forall uint256 index. index < ghostLength => to_mathint(ghostIndexes[ghostValues[index]]) == index + 1)
+    (forall uint256 index. 0 <= index && index < ghostLength => to_mathint(ghostIndexes[ghostValues[index]]) == index + 1)
     && (forall bytes32 value. ghostIndexes[value] == 0 || 
          (ghostValues[ghostIndexes[value] - 1] == value && ghostIndexes[value] >= 1 && ghostIndexes[value] <= ghostLength));
 
@@ -478,36 +478,29 @@ rule removeFacilitatorConsistencyCheck(){
 	env e;
 	address facilitator;
 
-	removeFacilitator@withrevert(e, facilitator);
-	bool lastRev = lastReverted;
-
-	assert (
-		e.msg.value > 0
-	) => lastRev;
-	assert !lastRev => (
-		GhoTokenHelper.getFacilitatorBucketCapacity(facilitator) == 0 &&
-		GhoTokenHelper.getFacilitatorBucketLevel(facilitator) == 0
-	);
-}
-
-/**
-* @notice removeFacilitator reverts if label length is zero
-*/
-rule removeFacilitatorRevertsIfLabelLengthIsZero(){
-
-	env e;
-	address facilitator;
-
 	string initialLabel = GhoTokenHelper.getFacilitatorLabel(facilitator);
 	uint256 initialLabelLength = initialLabel.length;
 	require initialLabelLength <= 2;
 
+	assumeInvariants(facilitator);
+
+	uint256 bucketLevel = GhoTokenHelper.getFacilitatorBucketLevel(facilitator);
+
 	removeFacilitator@withrevert(e, facilitator);
 	bool lastRev = lastReverted;
 
+	bool hasProperRole = hasRole(e, FACILITATOR_MANAGER_ROLE(e), e.msg.sender);
+
 	assert (
-		initialLabelLength == 0
-	) => lastRev;
+		e.msg.value > 0 ||
+		bucketLevel > 0 ||
+		initialLabelLength == 0 ||
+		!hasProperRole
+	) <=> lastRev;
+	assert !lastRev => (
+		GhoTokenHelper.getFacilitatorBucketCapacity(facilitator) == 0 &&
+		GhoTokenHelper.getFacilitatorBucketLevel(facilitator) == 0
+	);
 }
 
 /**
