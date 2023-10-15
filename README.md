@@ -9,7 +9,7 @@
   - Most information for installing and using the Certora Prover are available [here](https://docs.certora.com/en/latest/)
   - Additional resources to get familiar with the Certora Prover will be emailed to registrants along with their Certora key.
 - Starts September 27, 2023 16:00 UTC
-- Ends October 11, 2023 20:00 UTC
+- Ends October 15, 2023 20:00 UTC
 
 ---
 
@@ -29,7 +29,7 @@ Here are a few suggestions on how to achieve this goal:
 
 [GhoToken Coverage](https://prover.certora.com/output/40726/baacf10dede64645a2981b1348bc90f6/UnsatCoreVisualisation.html?anonymousKey=5ec8f9019d987b9626cf4ff68894c49a2d240856#commands-line-378-source-file-2)
 
-[GhoAToken Coverage](http://UnsatCoreVisualisation.html)
+[GhoAToken Coverage](https://prover.certora.com/output/11775/ff9422b5c4c845d4ac0f9cfe31db3323/UnsatCoreVisualisation.html?anonymousKey=b64ca5cbf808ce92fb583edb099a1dcab4fbc7de)
 
 [GhoFlashMinter Coverage](https://prover.certora.com/output/40726/9be9a6d7eb674e378d3e83828080ec98/UnsatCoreVisualisation.html?anonymousKey=2a11c47d666073b31d5c9d143bb4d750ec4412ca#commands-line-19-source-file-9)
 
@@ -39,20 +39,22 @@ Here are a few suggestions on how to achieve this goal:
 
 [GhoFlashMinter Mutation Testing](https://mutation-testing.certora.com/?id=7c1820e9-76ed-49f0-83e8-8951b2d13e92&anonymousKey=c5fdf672-8388-41b9-9f59-ad1e5ceca2fa)
 
+[GhoVariableDebtToken Mutation Testing](https://mutation-testing.certora.com/?id=196886b2-fc57-4cab-a7bd-3811619e76e1&anonymousKey=e5299592-d879-4fa7-87e8-080d8270c653)
+
 ---
 
 # Overview
 
-An overview of the rewards distributor and it's place in the Aave ecosystem can be found in:
+An overview of the GhoToken and it's place in the Aave ecosystem can be found in:
 
 1. [GhoToken docs](https://docs.aave.com/faq/gho-stablecoin).
 2. [GhoToken developer docs](https://docs.gho.xyz/developer-docs/overview).
 3. [Readme of the repository](https://github.com/aave/gho-core#readme)
 4. [Mutation testing docs](https://docs.certora.com/en/latest/docs/gambit/mutation-verifier.html)
 
-This challenge is about using the Certora prover to formally verify properties in the Solidity smart contract `contracts/rewards/RewardsController.sol`.
+This challenge is about using the Certora prover to formally verify properties in the Solidity smart contracts in scope.
 
-We will introduce several bugs in the smart contract, some of which are publicly available as patch files in `certora/tests/certora/`. The rest of the bugs will be made public at the end of the contest and will be used to evaluate the properties proven. You can find more information on the incentive structure and participation instructions further down in this doc.
+We will introduce several bugs in the smart contract, some of which are publicly available as patch files in `certora/mutations/participation/`. The rest of the bugs will be used to evaluate the properties proven and will be made public at the end of the contest evaluation. You can find more information on the incentive structure and participation instructions further down in this doc.
 
 # Scope
 
@@ -238,14 +240,9 @@ git remote -v
 
    This last action should pull the code from the `certora-repo` remote and embed it into the branch you checked out to. You potentially need to sort out conflicts, but in general you code is now synced and ready to push to your private remote whenever you need to.
 
-You’ll need to sync 2 branches on your fork:
-
-- `certora-contest` - your working branch.
-- `main` - a reference branch that should not be touched unless instructed otherwise.
-
 Make sure to grant read access to the judges `mailalexjoseph`, `teryanarmen`, `nd-certora` on GitHub.
 
-The forked repository will contain a `certora-contest` directory that consists of 4 sub-directories - `harnesses`, `conf`, `tests` and `specs`. These should contain the entire preliminary setup to allow you to start writing rules. Each sub-directory contains a different component of the verification project and may contain additional sub-directories to maintain organization. Try to keep a similar structure when adding new files.
+The forked repository will contain a `certora` directory that consists of 4 sub-directories - `harness`, `confs`, `mutations` and `specs`. These should contain the entire preliminary setup to allow you to start writing rules. Each sub-directory contains a different component of the verification project and may contain additional sub-directories to maintain organization. Try to keep a similar structure when adding new files.
 
 ### Setting Up The Project
 
@@ -253,13 +250,13 @@ In order to compile the contracts you'll need to install some packages using npm
 
 ## Participation
 
-In the certora/spec directory, you will find `.spec` files named `<name_of_contract>_verified.spec`. In these specs, gather all the rules and invariants that you were able to verify. Some functions, definitions, and properties have been setup up for you to serve as an example. Before submitting these specs, make sure to check the following things:
+In the certora/spec directory, you will find `.spec` files named `<name_of_contract>.spec`. In these specs, gather all the rules and invariants that you were able to verify. Some functions, definitions, and properties have been setup up for you to serve as an example. Before submitting these specs, make sure to check the following things:
 
 - Add the `--rule_sanity` flag to your conf files and check the entire spec to make sure that all rules are reachable at time of submission. Rules that are not reachable will not be counted towards participation as they will not catch any bugs.
 
 - Document each rule/invariant with a comment above that describes what the rule does in simple English. Any rule/invariant that isn’t documented will not be counted.
 
-- It is recommended to inject a bug for each rule you write. This will ensure the rule is doing what you think it should be doing. To get more info on how to save injected bugs easily and undo changes, read the `README` in `certora/tests` and run `make help` from the certora directory.
+- It is recommended to inject a bug for each rule you write. This will ensure the rule is doing what you think it should be doing.
 
 **Do not leave failing rules or rules that are unreachable in the specs.**
 
@@ -275,7 +272,7 @@ Instructions regarding the ideal way to "pitch" your bug report can be found bel
 
 ## Testing
 
-In the certora/conf directory, you will find conf file(s) that contains examples that can be used to run of your submitted spec files. You may need to configure these differently as you progress through the project. Many of the options available are documented [here](https://docs.certora.com/en/latest/docs/prover/cli/options.html?highlight=script). It is recommended to test your spec against the publicly available injected bugs, as well as bugs you injected yourself, to ensure your rules are working properly. You can do so by using the `verifyAllInjected.sh` script. This script will inject either the bugs injected by you or by certora one by one and run your spec against them.
+In the certora/conf directory, you will find conf file(s) that contains examples that can be used to run of your submitted spec files. You may need to configure these differently as you progress through the project. Many of the options available are documented [here](https://docs.certora.com/en/latest/docs/prover/cli/options.html?highlight=script). It is recommended to test your spec against the publicly available injected bugs, as well as bugs you injected yourself, to ensure your rules are working properly. You can do so by replacing the contracts in `src` with the ones in `certora/mutations/`.
 
 - Note that you need to pass an arg to the script, stating which of the 2 directories under `test` you want to run you specs against.
 
